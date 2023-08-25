@@ -98,6 +98,8 @@ public class ContextMapToCMLConverter {
     private Entity convertDomainObjectToEntity(org.contextmapper.discovery.model.DomainObject inputDomainObject) {
         Entity entity = TacticdslFactory.eINSTANCE.createEntity();
         entity.setName(inputDomainObject.getName());
+        if (inputDomainObject.getDiscoveryComment() != null && !"".equals(inputDomainObject.getDiscoveryComment()))
+            entity.setComment("/* " + inputDomainObject.getDiscoveryComment() + " */");
         domainObjectLookupMap.put(inputDomainObject, entity);
         return entity;
     }

@@ -82,18 +82,18 @@ public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedCo
     private void discoverAttributes(DomainObject domainObject, List<M2MField> m2mFields) {
         for (M2MField m2mField : m2mFields) {
             M2MDataType m2mDataType = m2mField.getType();
-            domainObject.addAttribute(new Attribute(discoverType(m2mDataType), m2mField.getName()));
+            domainObject.addAttribute(new Attribute(discoverType(m2mDataType, domainObject), m2mField.getName()));
         }
     }
 
-    private Type discoverType(M2MDataType m2mDataType) {
+    private Type discoverType(M2MDataType m2mDataType, DomainObject parentDomainObject) {
         Type type;
 
         if (domainObjectsByName.containsKey(m2mDataType.getName())) {
-            type = new Type(domainObjectsByName.get(m2mDataType.getName()));
+            type = createDomainObjectType(domainObjectsByName.get(m2mDataType.getName()), parentDomainObject.getParent());
         } else if (m2mDataType.isParameterizedType()) {
             // Only considering 1 parameter (List, Set, Collection)
-            type = discoverType(m2mDataType.getParameters().get(0));
+            type = discoverType(m2mDataType.getParameters().get(0), parentDomainObject);
         } else {
             type = new Type(m2mDataType.getName());
         }
@@ -103,6 +103,30 @@ public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedCo
         }
 
         return type;
+    }
+
+    private Type createDomainObjectType(DomainObject referencedDomainObject, Aggregate containingAggregate) {
+        return referencedDomainObject.getParent().equals(containingAggregate) ?
+                new Type(referencedDomainObject) :
+                new Type(getOrCreateReferenceDomainObject(
+                        referencedDomainObject.getName(), containingAggregate, referencedDomainObject.getParent()));
+    }
+
+    private DomainObject getOrCreateReferenceDomainObject(String name, Aggregate containingAggregate, Aggregate referencedAggregate) {
+        String referenceName = name + "_Reference";
+
+        if (domainObjectsByName.containsKey(referenceName)) {
+            return domainObjectsByName.get(referenceName);
+        }
+
+        DomainObject domainObject = new DomainObject(DomainObjectType.ENTITY, name + "_Reference");
+        domainObject.setDiscoveryComment(
+                "This entity was created to reference the '" + name +
+                        "' entity of the '" + referencedAggregate.getName() + "' aggregate.");
+        containingAggregate.addDomainObject(domainObject);
+        domainObjectsByName.put(referenceName, domainObject);
+
+        return domainObject;
     }
 
     protected M2MDecomposition parseM2MFile(File m2mFile) {
