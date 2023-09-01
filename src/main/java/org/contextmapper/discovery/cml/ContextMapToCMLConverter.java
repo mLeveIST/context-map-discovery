@@ -64,8 +64,19 @@ public class ContextMapToCMLConverter {
         for (org.contextmapper.discovery.model.Aggregate aggregate : inputContext.getAggregates()) {
             bc.getAggregates().add(convert(aggregate));
         }
+        if (inputContext.getApplication() != null) {
+            bc.setApplication(convert(inputContext.getApplication()));
+        }
         this.boundedContextMap.put(inputContext.getName(), bc);
         return bc;
+    }
+
+    private Application convert(org.contextmapper.discovery.model.Application inputApplication) {
+        Application application = ContextMappingDSLFactory.eINSTANCE.createApplication();
+        if (inputApplication.getName() != null && !"".equals(inputApplication.getName())) {
+            application.setName(inputApplication.getName());
+        }
+        return application;
     }
 
     private Aggregate convert(org.contextmapper.discovery.model.Aggregate inputAggregate) {

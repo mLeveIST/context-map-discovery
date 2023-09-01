@@ -32,6 +32,8 @@ public class BoundedContext {
     private String technology;
     private Set<Aggregate> aggregates;
 
+    private Application application;
+
     public BoundedContext(String name) {
         setName(name);
         this.aggregates = new HashSet<>();
@@ -101,6 +103,20 @@ public class BoundedContext {
     public Set<Aggregate> getAggregates() {
         return new HashSet<>(aggregates);
     }
+
+    /**
+     * Sets the Application of this Bounded Context
+     *
+     * @param application the Application of the Bounded Context
+     */
+    public void setApplication(Application application) { this.application = application; }
+
+    /**
+     * Gets the Application of the Bounded Context.
+     *
+     * @return the Application of the Bounded Context
+     */
+    public Application getApplication() {return application; }
 
     @Override
     public boolean equals(Object object) {

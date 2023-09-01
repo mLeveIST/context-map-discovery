@@ -40,12 +40,16 @@ public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedCo
 
     private Set<BoundedContext> discoverBoundedContexts(File m2mClustersFile) {
         Set<BoundedContext> boundedContexts = new HashSet<>();
-        for (M2MCluster m2mCluster : parseM2MFile(m2mClustersFile).getClusters()) {
+        M2MDecomposition m2mDecomposition = parseM2MFile(m2mClustersFile);
+        for (M2MCluster m2mCluster : m2mDecomposition.getClusters()) {
             BoundedContext boundedContext = new BoundedContext(m2mCluster.getName());
             boundedContext.addAggregate(discoverAggregate(m2mCluster));
+            boundedContext.setApplication(new Application(m2mCluster.getName() + "_Application"));
             boundedContexts.add(boundedContext);
         }
-
+        for (M2MFunctionality m2mFunctionality : m2mDecomposition.getFunctionalities()) {
+            break;
+        }
         return boundedContexts;
     }
 
@@ -183,6 +187,10 @@ public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedCo
 
         public Set<M2MEntity> getEntities() {
             return entities;
+        }
+
+        public Set<M2MFunctionality> getFunctionalities() {
+            return functionalities;
         }
     }
 
@@ -328,7 +336,7 @@ public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedCo
 
         private String name;
         private String orchestrator;
-        private List<M2MSagaStep> steps;
+        private List<M2MFunctionalityStep> steps;
 
         public M2MFunctionality() {
             this.steps = new ArrayList<>();
@@ -342,7 +350,7 @@ public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedCo
             return orchestrator;
         }
 
-        public List<M2MSagaStep> getSteps() {
+        public List<M2MFunctionalityStep> getSteps() {
             return steps;
         }
 
@@ -357,12 +365,12 @@ public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedCo
         }
     }
 
-    protected static class M2MSagaStep {
+    protected static class M2MFunctionalityStep {
 
         private String cluster;
         private List<M2MEntityAccess> accesses;
 
-        public M2MSagaStep() {
+        public M2MFunctionalityStep() {
             this.accesses = new ArrayList<>();
         }
 
