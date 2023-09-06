@@ -31,7 +31,6 @@ public class BoundedContext {
     private String name;
     private String technology;
     private Set<Aggregate> aggregates;
-
     private Application application;
 
     public BoundedContext(String name) {

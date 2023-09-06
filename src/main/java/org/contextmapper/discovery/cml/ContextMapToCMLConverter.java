@@ -36,6 +36,8 @@ public class ContextMapToCMLConverter {
 
     private Map<String, BoundedContext> boundedContextMap = new HashMap<>();
     private Map<org.contextmapper.discovery.model.DomainObject, DomainObject> domainObjectLookupMap = new HashMap<>();
+    private Map<String, Service> serviceMap = new HashMap<>();
+    private Map<org.contextmapper.discovery.model.Functionality, Functionality> functionalityLookupMap = new HashMap<>();
 
     public ContextMappingModel convert(org.contextmapper.discovery.model.ContextMap inputMap) {
         ContextMappingModel model = ContextMappingDSLFactory.eINSTANCE.createContextMappingModel();
@@ -53,6 +55,7 @@ public class ContextMapToCMLConverter {
         }
 
         updateEntityAttributesAndReferences();
+        updateFunctionalitySteps();
 
         return model;
     }
@@ -76,7 +79,29 @@ public class ContextMapToCMLConverter {
         if (inputApplication.getName() != null && !"".equals(inputApplication.getName())) {
             application.setName(inputApplication.getName());
         }
+        for (org.contextmapper.discovery.model.Service service : inputApplication.getServices()) {
+            application.getServices().add(convertAndSave(service));
+        }
+        for (org.contextmapper.discovery.model.Functionality functionality : inputApplication.getFunctionalities()) {
+            application.getFunctionalities().add(convert(functionality));
+        }
         return application;
+    }
+
+    private Service convertAndSave(org.contextmapper.discovery.model.Service inputService) {
+        Service service = convert(inputService);
+        serviceMap.put(inputService.getName(), service);
+        return service;
+    }
+
+    private Functionality convert(org.contextmapper.discovery.model.Functionality inputFunctionality) {
+        Functionality functionality = ContextMappingDSLFactory.eINSTANCE.createFunctionality();
+        if (inputFunctionality.getName() != null && !"".equals(inputFunctionality.getName())) {
+            functionality.setName(inputFunctionality.getName());
+        }
+        functionality.setSagaOrchestrator(inputFunctionality.isSaga());
+        this.functionalityLookupMap.put(inputFunctionality, functionality);
+        return functionality;
     }
 
     private Aggregate convert(org.contextmapper.discovery.model.Aggregate inputAggregate) {
@@ -178,7 +203,9 @@ public class ContextMapToCMLConverter {
     private Service convert(org.contextmapper.discovery.model.Service inputService) {
         Service service = TacticdslFactory.eINSTANCE.createService();
         service.setName(inputService.getName());
-        service.setComment("/* " + inputService.getDiscoveryComment() + " */");
+        if (inputService.getDiscoveryComment() != null && !"".equals(inputService.getDiscoveryComment())) {
+            service.setComment("/* " + inputService.getDiscoveryComment() + " */");
+        }
         convertServiceOperations(inputService, service);
         return service;
     }
@@ -218,5 +245,32 @@ public class ContextMapToCMLConverter {
                 reference.setCollectionType(CollectionType.get(inputAttribute.getType().getCollectionType()));
             domainObject.getReferences().add(reference);
         }
+    }
+
+    private void updateFunctionalitySteps() {
+        for (Map.Entry<org.contextmapper.discovery.model.Functionality, Functionality> entry : this.functionalityLookupMap.entrySet()) {
+            updateFunctionality(entry.getKey(), entry.getValue());
+        }
+    }
+
+    private void updateFunctionality(org.contextmapper.discovery.model.Functionality inputFunctionality, Functionality functionality) {
+        for (org.contextmapper.discovery.model.FunctionalityStep inputFunctionalityStep : inputFunctionality.getFunctionalitySteps()) {
+            functionality.getFunctionalitySteps().add(convert(inputFunctionalityStep));
+        }
+    }
+
+    private FunctionalityStep convert(org.contextmapper.discovery.model.FunctionalityStep inputFunctionalityStep) {
+        FunctionalityStep functionalityStep = ContextMappingDSLFactory.eINSTANCE.createFunctionalityStep();
+
+        BoundedContext boundedContext = boundedContextMap.get(inputFunctionalityStep.getStepBoundedContext().getName());
+        functionalityStep.setBoundedContext(boundedContext);
+        boundedContext.getApplication().getServices().stream()
+                .filter(s -> s.getName().equals(inputFunctionalityStep.getStepService().getName()))
+                .findFirst().ifPresent(functionalityStep::setService);
+        functionalityStep.getService().getOperations().stream()
+                .filter(o -> o.getName().equals(inputFunctionalityStep.getStepOperation().getName()))
+                .findFirst().ifPresent(functionalityStep::setOperation);
+
+        return functionalityStep;
     }
 }

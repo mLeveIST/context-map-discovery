@@ -94,6 +94,35 @@ public class Mono2MicroBoundedContextDiscoveryStrategyTest {
     }
 
     @Test
+    public void canDiscoverFunctionalities() {
+        // given
+        ContextMapDiscoverer discoverer = new ContextMapDiscoverer()
+                .usingBoundedContextDiscoveryStrategies(
+                        new Mono2MicroBoundedContextDiscoveryStrategy(
+                                new File("./src/test/resources/test/mono2micro/valid-contract")));
+
+        // when
+        Set<BoundedContext> boundedContexts = discoverer.discoverContextMap().getBoundedContexts();
+
+        // then
+        assertTrue(boundedContexts.size() > 0);
+        BoundedContext boundedContext = boundedContexts.stream()
+                .filter(bc -> bc.getName().equals("Cluster0"))
+                .findFirst().orElse(null);
+        assertNotNull(boundedContext);
+        assertNotNull(boundedContext.getApplication());
+        Set<Functionality> functionalities = boundedContext.getApplication().getFunctionalities();
+        assertEquals(1, functionalities.size());
+        List<FunctionalityStep> functionalitySteps = functionalities.stream().findAny().get().getFunctionalitySteps();
+        assertEquals(6, functionalitySteps.size());
+        assertEquals("Cluster0", functionalitySteps.get(0).getStepBoundedContext().getName());
+        assertEquals("ConcludeQuizService", functionalitySteps.get(0).getStepService().getName());
+        assertEquals("step0", functionalitySteps.get(0).getStepOperation().getName());
+        Set<Service> services = boundedContext.getApplication().getServices();
+        assertEquals(7, services.size());
+    }
+
+    @Test
     public void emptyResultIfM2MContractHasInvalidFormat() {
         // given
         ContextMapDiscoverer discoverer = new ContextMapDiscoverer()

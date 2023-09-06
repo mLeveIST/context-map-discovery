@@ -12,15 +12,20 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.*;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedContextDiscoveryStrategy implements BoundedContextDiscoveryStrategy {
 
     private File sourcePath;
     private Map<String, DomainObject> domainObjectsByName;
+    private Map<String, BoundedContext> boundedContextsByName;
+    private Map<String, Service> servicesByName;
 
     public Mono2MicroBoundedContextDiscoveryStrategy(File sourcePath) {
         this.sourcePath = sourcePath;
         this.domainObjectsByName = new HashMap<>();
+        this.boundedContextsByName = new HashMap<>();
+        this.servicesByName = new HashMap<>();
     }
 
     @Override
@@ -42,18 +47,24 @@ public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedCo
         Set<BoundedContext> boundedContexts = new HashSet<>();
         M2MDecomposition m2mDecomposition = parseM2MFile(m2mClustersFile);
         for (M2MCluster m2mCluster : m2mDecomposition.getClusters()) {
-            BoundedContext boundedContext = new BoundedContext(m2mCluster.getName());
-            boundedContext.addAggregate(discoverAggregate(m2mCluster));
-            boundedContext.setApplication(new Application(m2mCluster.getName() + "_Application"));
+            BoundedContext boundedContext = createBoundedContext(m2mCluster, m2mDecomposition);
             boundedContexts.add(boundedContext);
+            boundedContextsByName.put(m2mCluster.getName(), boundedContext);
         }
-        for (M2MFunctionality m2mFunctionality : m2mDecomposition.getFunctionalities()) {
-            break;
+        for (BoundedContext boundedContext : boundedContextsByName.values()) {
+            updateApplicationFunctionalities(boundedContext, m2mDecomposition);
         }
         return boundedContexts;
     }
 
-    private Aggregate discoverAggregate(M2MCluster m2mCluster) {
+    private BoundedContext createBoundedContext(M2MCluster m2mCluster, M2MDecomposition m2mDecomposition) {
+        BoundedContext boundedContext = new BoundedContext(m2mCluster.getName());
+        boundedContext.addAggregate(createAggregate(m2mCluster));
+        boundedContext.setApplication(createApplication(m2mCluster));
+        return boundedContext;
+    }
+
+    private Aggregate createAggregate(M2MCluster m2mCluster) {
         Aggregate aggregate = new Aggregate(m2mCluster.getName());
         aggregate.addDomainObjects(discoverDomainObjects(m2mCluster));
         return aggregate;
@@ -62,12 +73,88 @@ public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedCo
     private Set<DomainObject> discoverDomainObjects(M2MCluster m2mCluster) {
         Set<DomainObject> domainObjects = new HashSet<>();
         for (M2MEntity m2mEntity : m2mCluster.getElements()) {
-            DomainObject domainObject = new DomainObject(DomainObjectType.ENTITY, m2mEntity.getName());
+            DomainObject domainObject = createDomainObject(m2mEntity);
             domainObjects.add(domainObject);
             domainObjectsByName.put(m2mEntity.getName(), domainObject);
         }
 
         return domainObjects;
+    }
+
+    private DomainObject createDomainObject(M2MEntity m2mEntity) {
+        return new DomainObject(DomainObjectType.ENTITY, m2mEntity.getName());
+    }
+
+    private Application createApplication(M2MCluster m2mCluster) {
+        return new Application(m2mCluster.getName() + "Application");
+    }
+
+    private void updateApplicationFunctionalities(BoundedContext boundedContext, M2MDecomposition m2mDecomposition) {
+        Set<M2MFunctionality> m2mFunctionalities = getBoundedContextFunctionalities(boundedContext, m2mDecomposition);
+        for (M2MFunctionality m2mFunctionality : m2mFunctionalities) {
+            String functionalityName = getFunctionalityName(m2mFunctionality);
+            Functionality functionality = createFunctionality(m2mFunctionality, functionalityName);
+            boundedContext.getApplication().addFunctionality(functionality);
+        }
+    }
+
+    private Set<M2MFunctionality> getBoundedContextFunctionalities(BoundedContext boundedContext, M2MDecomposition m2mDecomposition) {
+        return m2mDecomposition.getFunctionalities().stream()
+                .filter(f -> f.getOrchestrator().equals(boundedContext.getName()))
+                .collect(Collectors.toSet());
+    }
+
+    private String getFunctionalityName(M2MFunctionality m2mFunctionality) {
+        String m2mFunctionalityName = m2mFunctionality.getName().split("\\.")[1];
+        return m2mFunctionalityName.substring(0, 1).toUpperCase() +
+                m2mFunctionalityName.substring(1);
+    }
+
+    private Functionality createFunctionality(M2MFunctionality m2mFunctionality, String functionalityName) {
+        Functionality functionality = new Functionality(functionalityName + "Functionality");
+        functionality.setSaga(true);
+        functionality.addFunctionalitySteps(discoverFunctionalitySteps(m2mFunctionality.getSteps(), functionalityName));
+        return functionality;
+    }
+
+    private List<FunctionalityStep> discoverFunctionalitySteps(List<M2MFunctionalityStep> m2mFunctionalitySteps, String functionalityName) {
+        List<FunctionalityStep> functionalitySteps = new ArrayList<>();
+        int stepCounter = 0;
+        for (M2MFunctionalityStep m2mFunctionalityStep : m2mFunctionalitySteps) {
+            functionalitySteps.add(discoverFunctionalityStep(m2mFunctionalityStep, functionalityName, stepCounter++));
+        }
+        return functionalitySteps;
+    }
+
+    private FunctionalityStep discoverFunctionalityStep(M2MFunctionalityStep m2mFunctionalityStep, String functionalityName, int stepCounter) {
+        BoundedContext boundedContext = boundedContextsByName.get(m2mFunctionalityStep.getCluster());
+        Service service = getOrCreateFunctionalityService(boundedContext, functionalityName);
+        Method operation = createFunctionalityOperation(service, stepCounter);
+        return createFunctionalityStep(boundedContext, service, operation);
+    }
+
+    private Service getOrCreateFunctionalityService(BoundedContext boundedContext, String functionalityName) {
+        String serviceName = functionalityName + "Service";
+        return boundedContext.getApplication().getServices().stream()
+                .filter(s -> s.getName().equals(serviceName))
+                .findFirst()
+                .orElse(createFunctionalityService(boundedContext, serviceName));
+    }
+
+    private Service createFunctionalityService(BoundedContext boundedContext, String serviceName) {
+        Service service = new Service(serviceName);
+        boundedContext.getApplication().addService(service);
+        return service;
+    }
+
+    private Method createFunctionalityOperation(Service service, int stepCounter) {
+        Method operation = new Method("step" + stepCounter);
+        service.addOperation(operation);
+        return operation;
+    }
+
+    private FunctionalityStep createFunctionalityStep(BoundedContext boundedContext, Service service, Method operation) {
+        return new FunctionalityStep(boundedContext, service, operation);
     }
 
     private void updateDomainObjectsAttributes(File m2mStructureFile) {
@@ -238,7 +325,6 @@ public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedCo
     protected static class M2MEntity {
 
         private String name;
-        private int id;
         private List<M2MField> fields;
         private M2MDataType superclass;
 
@@ -253,10 +339,6 @@ public class Mono2MicroBoundedContextDiscoveryStrategy extends AbstractBoundedCo
 
         public String getName() {
             return name;
-        }
-
-        public int getId() {
-            return id;
         }
 
         public List<M2MField> getFields() {

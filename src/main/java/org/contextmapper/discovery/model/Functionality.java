@@ -1,16 +1,21 @@
 package org.contextmapper.discovery.model;
 
-import java.util.HashSet;
-import java.util.Set;
+import org.apache.commons.lang3.builder.EqualsBuilder;
+import org.apache.commons.lang3.builder.HashCodeBuilder;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class Functionality {
 
     private String name;
-    private Set<FunctionalityStep> functionalitySteps;
+    private List<FunctionalityStep> functionalitySteps;
+    private boolean isSaga;
 
     public Functionality(String name) {
         setName(name);
-        this.functionalitySteps = new HashSet<>();
+        setSaga(false);
+        this.functionalitySteps = new ArrayList<>();
     }
 
     /**
@@ -47,7 +52,7 @@ public class Functionality {
      *
      * @param functionalitySteps the set of Functionality steps to be added to the Functionality
      */
-    public void addSagaSteps(Set<FunctionalityStep> functionalitySteps) {
+    public void addFunctionalitySteps(List<FunctionalityStep> functionalitySteps) {
         for (FunctionalityStep functionalityStep : functionalitySteps) {
             this.addFunctionalityStep(functionalityStep);
         }
@@ -58,7 +63,34 @@ public class Functionality {
      *
      * @return the set of Functionality steps which are part of the Functionality
      */
-    public Set<FunctionalityStep> getFunctionalitySteps() {
-        return new HashSet<>(functionalitySteps);
+    public List<FunctionalityStep> getFunctionalitySteps() {
+        return new ArrayList<>(functionalitySteps);
+    }
+
+    public boolean isSaga() {
+        return isSaga;
+    }
+
+    public void setSaga(boolean saga) {
+        isSaga = saga;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (!(object instanceof Functionality))
+            return false;
+
+        Functionality functionality = (Functionality) object;
+
+        return new EqualsBuilder()
+                .append(name, functionality.name)
+                .isEquals();
+    }
+
+    @Override
+    public int hashCode() {
+        return new HashCodeBuilder()
+                .append(name)
+                .hashCode();
     }
 }
